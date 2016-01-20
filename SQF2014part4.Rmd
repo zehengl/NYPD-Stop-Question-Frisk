@@ -1,0 +1,76 @@
+---
+title: "NYPD Stop-Question-Frisk Part 4 Association Rules Mining"
+author: "zehengl"
+date: "January 27, 2016"
+output: html_document
+---
+
+# Load the Cleansed Dataset
+```{r, cache=TRUE}
+load("SQF_clean.rda")
+```
+
+# Convert dataset to transactions
+In order to perform itemsets mining we need to convert our dataset to transactions
+```{r}
+library(arules)
+print( try(trans <- as(dat, "transactions")) )
+colnames(dat)[c(2, 3, 6, 7, 74, 79, 80)]
+```
+As suggested by the error message, we need to discretize those columns. "xcoord" and "ycoord" are not removed.
+
+```{r}
+datestop <- dat[,"datestop"]
+dat[,"datestop"] <- discretize(datestop,method="interval",categories=12)
+
+timestop <- dat[,"timestop"]
+dat[,"timestop"] <- discretize(timestop,method="interval",categories=24)
+
+perobs <- dat[,"perobs"]
+dat[,"perobs"] <- discretize(perobs,method="frequency",categories= 3)
+
+perstop <- dat[,"perstop"]
+dat[,"perstop"] <- discretize(perstop,method="frequency",categories= 3)
+
+age <- dat[,"age"]
+dat[,"age"] <- discretize(timestop,method="frequency",categories= 3)
+
+dat[,"xcoord"] <- NULL
+dat[,"ycoord"] <- NULL
+```
+
+Let's create a new column to represent whether a pedestrian is armed and clean out some other columns.
+```{r}
+dat$armed <- dat$pistol | dat$riflshot | dat$asltweap | dat$knifcuti | 
+  dat$machgun | dat$othrweap | dat$contrabn
+for (i in c("contrabn","pistol","riflshot","asltweap","knifcuti","machgun","othrweap")){
+  dat[,i]<-NULL
+}
+
+for (i in c("offverb","offshld","officrid","offunif","typeofid")){
+  dat[,i]<-NULL
+}
+```
+
+Now Let's redo the transaction conversion.
+```{r}
+print( try(trans <- as(dat, "transactions")) )
+```
+
+```{r}
+itemFrequencyPlot(trans,topN=20)
+
+plot(sort(itemFrequency(trans, type="absolute"), decreasing=TRUE),
+     xlab = "Items", ylab="Support Count", type="l")
+```
+
+```{r}
+freqs <- apriori(trans, parameter=list(target="frequent", support=0.5, minlen=2, maxlen=5))
+freqs <- sort(freqs, by="support")
+inspect(head(freqs, n=10))
+rules <- apriori(trans, parameter=list(target="rules", support=0.5, minlen=2, maxlen=5))
+rules <- sort(rules, by="lift")
+inspect(head(rules, n=10))
+
+```
+

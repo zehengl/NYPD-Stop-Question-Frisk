@@ -1,0 +1,111 @@
+---
+title: "NYPD Stop-Question-Frisk Part 3 Classification"
+author: "zehengl"
+date: "January 24, 2016"
+output: html_document
+---
+
+# Load the Cleansed Dataset
+```{r, cache=TRUE}
+load("SQF_clean.rda")
+
+```
+
+# What to predict?
+To begin with, we need to identify a task. Recall from previous sections that cs_* stands for the reasons for stop. Can we generate a model to predict whether a pedestrian will be arrested based on the following feautres?
+
+* cs_*: reasons to stop a pedestrain (initail reasons matters?)
+* sex: gender of the pedestrain matters?
+* race: race matters?
+* city: location matters?
+* timestop: hour of day matters?
+
+**(You should perform your reasoning for feautre selection. )**
+
+Now let's try out some classification packages in R.
+
+# Training and Testing split
+Let's simply divide the dataset into two sets: training and testing sets, where data in testing set will not occur in training set. And we evaluate the performance of our predicitive models.
+
+```{r}
+set.seed(5)
+dat$arstmade = as.factor(dat$arstmade)
+for(b in grep("cs_", colnames(dat), value=TRUE)) dat[[b]] <- as.factor(dat[[b]])
+select <- grep("cs_", colnames(dat), value=TRUE)
+select <- c(select, c("sex","race","city","timestop","arstmade"))
+dat <- dat[,select]
+dat <- dat[complete.cases(dat),]
+index = sample(nrow(dat), nrow(dat)*.75)
+train = dat[index,]
+test = dat[-index,]
+```
+In this case, training set has `r nrow(train)` instances and testing set has `r nrow(test)`.
+
+# Metrics: Compute the accuracy, recall, precision, and F-measure
+
+```{r}
+performance <- function(pred, truth){
+  cm <- table(pred,truth)      
+  tp <- cm[2,2]   
+  tn <- cm[1,1]   
+  fp <- cm[2,1]   
+  fn <- cm[1,2]   
+  accuracy <- (tp+tn) / length(truth)   
+  recall <- (tp) / (tp+fn)   
+  precision <- (tp) / (tp+fp)   
+  fmeasure <- 2*recall*precision/(recall+precision)      
+  result <- as.data.frame(c(accuracy, recall, precision, fmeasure))
+  colnames(result) <- c("Performance")
+  row.names(result) <- c("Accuracy", "Recall", "Precision", "F-measure")
+  return(result)
+}
+```
+
+# Decision Tree
+```{r, cache=TRUE}
+library(rpart)
+
+m <- rpart(arstmade ~ sex + race + city + timestop + cs_objcs + cs_descr + cs_casng + cs_lkout + cs_cloth + cs_drgtr + cs_furtv + cs_vcrim + cs_bulge, data=train, control = rpart.control(cp=.0001, minsplit=10))
+
+pred <- predict(m,test,type="class")
+truth <- test$arstmade
+performance(pred, truth)
+```
+
+# Naive Bayes
+```{r, cache=TRUE}
+library(e1071)
+
+m <- naiveBayes(arstmade ~ sex + race + city + timestop + cs_objcs + cs_descr + cs_casng + cs_lkout + cs_cloth + cs_drgtr + cs_furtv + cs_vcrim + cs_bulge, data=train)
+
+pred <- predict(m,test,type="class")
+truth <- test$arstmade
+performance(pred, truth)
+```
+
+# Support Vector Machine
+```{r, cache=TRUE}
+library(doParallel)
+
+registerDoParallel()
+getDoParWorkers()
+
+library(e1071)
+
+m <- svm(arstmade ~ sex + race + city + timestop + cs_objcs + cs_descr + cs_casng + cs_lkout + cs_cloth + cs_drgtr + cs_furtv + cs_vcrim + cs_bulge, data=train, cost=100)
+
+pred <- predict(m,test)
+truth <- test$arstmade
+performance(pred, truth)
+```
+
+# Random Forest
+```{r, cache=TRUE}
+library(randomForest)
+
+m <- randomForest(arstmade ~ sex + race + city + timestop + cs_objcs + cs_descr + cs_casng + cs_lkout + cs_cloth + cs_drgtr + cs_furtv + cs_vcrim + cs_bulge, data=train)
+
+pred <- predict(m,test,type="class")
+truth <- test$arstmade
+performance(pred, truth)
+```

@@ -1,0 +1,299 @@
+---
+title: "NYPD Stop-Question-Frisk Part 1 Data Cleansing" 
+author: "zehengl"
+date: "January 18, 2016"
+output: html_document
+---
+
+The Stop, Question and Frisk Data from NYPD is available at http://www.nyc.gov/html/nypd/html/analysis_and_planning/stop_question_and_frisk_report.shtml
+
+Download the 2014 archive and specs, unzip, and let the party begins.
+
+# Getting Familiar with Data
+
+```{r, cache=TRUE}
+dat <- read.csv("2014.csv")
+```
+First, load 2014 SQF dataset and take a look at the data. There are `r dim(dat)[1]` rows and `r dim(dat)[2]` columns.
+
+```{r}
+head(dat)
+```
+
+In order to comprehend the information captured in the csv file, you need to go through the specs document. For example, column "pct" stands for precinct of stop; column "perobs" stands for period of observation in minutes; etc. 
+
+# Cleasing the data
+
+```{r}
+# 1 YEAR OF STOP (CCYY)
+dat$year <- NULL
+
+# 2 PRECINCT OF STOP (FROM 1 TO 123)
+dat$pct <- as.factor(dat$pct)
+
+# 3 UF250 SERIAL NUMBER
+dat$ser_num <- NULL
+
+# 4 DATE OF STOP (MM-DD-YYYY)
+dat$datestop <- as.Date(sprintf("%08d", dat$datestop), format ="%m%d%Y")
+
+# 5 TIME OF STOP (HH:MM)
+dat$timestop <- as.integer(substr(sprintf("%04d", dat$timestop), 1, 2))
+
+# 6 RECORD STATUS
+dat$recstat <- NULL
+
+# 7 WAS STOP INSIDE OR OUTSIDE ?
+dat$inout <- as.factor(dat$inout)
+
+# 8 WAS LOCATION HOUSING OR TRANSIT AUTHORITY ?
+dat$trhsloc <- as.factor(dat$trhsloc)
+```
+
+```{r}
+# 9 PERIOD OF OBSERVATION (MMM)
+summary(dat$perobs)
+```
+Clearly there are some outliers. Let's remove those greater than 2 hours (120).
+
+```{r}
+# 9 PERIOD OF OBSERVATION (MMM)
+dat$perobs[ dat$perobs>120 ] <- NA
+dat$perobs <- as.integer(as.character(dat$perobs))
+
+# 10 CRIME SUSPECTED
+dat$crimsusp <- NULL
+```
+
+```{r}
+# 11 PERIOD OF STOP (MMM)
+summary(dat$perstop)
+```
+"**" is not a valid input. Let's remove it.
+
+```{r}
+# 11 PERIOD OF STOP (MMM)
+dat$perstop[dat$perstop =="**"] <- NA
+dat$perstop <- as.integer(as.character(dat$perstop))
+
+# 12 STOPPED PERSON'S IDENTIFICATION TYPE
+dat$typeofid <- as.factor(dat$typeofid)
+
+# 13 DID OFFICER EXPLAIN REASON FOR STOP ?
+dat$explnstp <- dat$explnstp=="Y"
+
+# 14 WERE OTHER PERSONS STOPPED, QUESTIONED OR FRISKED ?
+dat$othpers <- dat$othpers=="Y"
+
+# 15 WAS AN ARREST MADE ?
+dat$arstmade <- dat$arstmade=="Y"
+
+# 16 OFFENSE SUSPECT ARRESTED FOR
+dat$arstoffn <- NULL
+
+# 17 WAS A SUMMONS ISSUED ?
+dat$sumissue <- dat$sumissue=="Y"
+
+# 18 OFFENSE SUSPECT WAS SUMMONSED FOR
+dat$sumoffen <- NULL
+
+# 19 COMPLAINT YEAR (IF COMPLAINT REPORT PREPARED)
+dat$compyear <- NULL
+
+# 20 COMPLAINT PRECINCT (IF COMPLAINT REPORT PREPARED)
+dat$comppct <- NULL
+
+# 21 WAS OFFICER IN UNIFORM ?
+dat$offunif <- dat$offunif=="Y"
+
+# 22 ID CARD PROVIDED BY OFFICER (IF NOT IN UNIFORM)
+dat$officrid <- NULL
+
+# 23 WAS SUSPECT FRISKED ?
+dat$frisked <- dat$frisked=="Y"
+
+# 24 WAS SUSPECT SEARCHED ?
+dat$searched <- dat$searched=="Y"
+
+# WAS ARMED?
+  # 25 WAS CONTRABAND FOUND ON SUSPECT ?
+  # 27 WAS A PISTOL FOUND ON SUSPECT ?
+  # 28 WAS A RIFLE FOUND ON SUSPECT ?
+  # 29 WAS AN ASSAULT WEAPON FOUND ON SUSPECT ?
+  # 30 WAS A KNIFE OR CUTTING INSTRUMENT FOUND ON SUSPECT ?
+  # 31 WAS A MACHINE GUN FOUND ON SUSPECT ?
+  # 32 WAS ANOTHER TYPE OF WEAPON FOUND ON SUSPECT
+binary <- strsplit("contrabn pistol riflshot asltweap knifcuti machgun othrweap",   " ")[[1]]
+for(b in binary) dat[[b]] <- dat[[b]]=="Y"
+
+# 26 WERE ADDITIONAL REPORTS PREPARED ?
+dat$adtlrept <- dat$adtlrept=="Y"
+
+# PHYSICAL FORCE USED BY OFFICER
+  # 33 PHYSICAL FORCE USED BY OFFICER - HANDS
+  # 34 PHYSICAL FORCE USED BY OFFICER - SUSPECT AGAINST WALL
+  # 35 PHYSICAL FORCE USED BY OFFICER - SUSPECT ON GROUND
+  # 36 PHYSICAL FORCE USED BY OFFICER - WEAPON DRAWN
+  # 37 PHYSICAL FORCE USED BY OFFICER - WEAPON POINTED
+  # 38 PHYSICAL FORCE USED BY OFFICER - BATON
+  # 39 PHYSICAL FORCE USED BY OFFICER - HANDCUFFS
+  # 40 PHYSICAL FORCE USED BY OFFICER - PEPPER SPRAY
+  # 41 PHYSICAL FORCE USED BY OFFICER - OTHER
+for(b in grep("pf_", colnames(dat), value=TRUE)) dat[[b]] <- dat[[b]]=="Y"
+
+# 42 RADIO RUN
+dat$radio <- dat$radio=="Y"
+
+# ADDITIONAL CIRCUMSTANCES
+  # 43 ADDITIONAL CIRCUMSTANCES - REPORT BY VICTIM/WITNESS/OFFICER
+  # 44 ADDITIONAL CIRCUMSTANCES - ONGOING INVESTIGATION
+  # 47 ADDITIONAL CIRCUMSTANCES - PROXIMITY TO SCENE OF OFFENSE
+  # 56 ADDITIONAL CIRCUMSTANCES - EVASIVE RESPONSE TO QUESTIONING
+  # 57 ADDITIONAL CIRCUMSTANCES - ASSOCIATING WITH KNOWN CRIMINALS
+  # 60 ADDITIONAL CIRCUMSTANCES - CHANGE DIRECTION AT SIGHT OF OFFICER
+  # 65 ADDITIONAL CIRCUMSTANCES - AREA HAS HIGH CRIME INCIDENCE
+  # 68 ADDITIONAL CIRCUMSTANCES - SIGHTS OR SOUNDS OF CRIMINAL ACTIVITY
+  # 69 ADDITIONAL CIRCUMSTANCES - OTHER
+  # 66 ADDITIONAL CIRCUMSTANCES - TIME OF DAY FITS CRIME INCIDENCE
+for(b in grep("ac_", colnames(dat), value=TRUE)) dat[[b]] <- dat[[b]]=="Y"
+
+# REASON FOR FRISK
+  # 45 REASON FOR FRISK - VIOLENT CRIME SUSPECTED
+  # 46 REASON FOR FRISK - OTHER SUSPICION OF WEAPONS
+  # 48 REASON FOR FRISK - INAPPROPRIATE ATTIRE FOR SEASON
+  # 53 REASON FOR FRISK-  ACTIONS OF ENGAGING IN A VIOLENT CRIME
+  # 59 REASON FOR FRISK - REFUSE TO COMPLY W OFFICER'S DIRECTIONS
+  # 61 REASON FOR FRISK - VERBAL THREATS BY SUSPECT
+  # 67 REASON FOR FRISK - KNOWLEDGE OF SUSPECT'S PRIOR CRIM BEHAV
+  # 76 REASON FOR FRISK - FURTIVE MOVEMENTS
+  # 77 REASON FOR FRISK - SUSPICIOUS BULGE
+for(b in grep("rf_", colnames(dat), value=TRUE)) dat[[b]] <- dat[[b]]=="Y"
+
+# REASON FOR STOP
+  # 49 REASON FOR STOP - CARRYING SUSPICIOUS OBJECT
+  # 50 REASON FOR STOP - FITS A RELEVANT DESCRIPTION
+  # 51 REASON FOR STOP - CASING A VICTIM OR LOCATION
+  # 52 REASON FOR STOP - SUSPECT ACTING AS A LOOKOUT
+  # 54 REASON FOR STOP - WEARING CLOTHES COMMONLY USED IN A CRIME
+  # 55 REASON FOR STOP - ACTIONS INDICATIVE OF A DRUG TRANSACTION
+  # 58 REASON FOR STOP - FURTIVE MOVEMENTS
+  # 62 REASON FOR STOP - ACTIONS OF ENGAGING IN A VIOLENT CRIME
+  # 63 REASON FOR STOP - SUSPICIOUS BULGE
+  # 64 REASON FOR STOP - OTHER
+for(b in grep("cs_", colnames(dat), value=TRUE)) dat[[b]] <- dat[[b]]=="Y"
+
+# BASIS OF SEARCH
+  # 70 BASIS OF SEARCH - HARD OBJECT
+  # 71 BASIS OF SEARCH - OUTLINE OF WEAPON
+  # 72 BASIS OF SEARCH - ADMISSION BY SUSPECT
+  # 73 BASIS OF SEARCH - OTHER
+for(b in grep("sb_", colnames(dat), value=TRUE)) dat[[b]] <- dat[[b]]=="Y"
+
+# 74 REPORTING OFFICER'S COMMAND (1 TO 999)
+dat$repcmd <- as.factor(dat$repcmd)
+
+# 75 REVIEWING OFFICER'S COMMAND (1 TO 999)
+dat$revcmd <- as.factor(dat$revcmd)
+
+# 78 VERBAL STATEMENT PROVIDED BY OFFICER (IF NOT IN UNIFORM)
+dat$offverb <- as.factor(dat$offverb)
+
+# 79 SHIELD PROVIDED BY OFFICER (IF NOT IN UNIFORM)
+dat$offshld <- as.factor(dat$offshld)
+
+# 80 REASON FORCE USED
+dat$forceuse <- as.factor(dat$forceuse)
+
+# 81 SUSPECT'S SEX
+dat$sex <- as.factor(dat$sex)
+
+# 82 SUSPECT'S RACE
+dat$race <- as.factor(dat$race)
+
+# 83 SUSPECT'S DATE OF BIRTH (CCYY-MM-DD)
+dat$dob <- NULL
+```
+
+```{r}
+# 84 SUSPECT'S AGE
+dat$age <- as.integer(as.character(dat$age))
+summary(dat$age)
+```
+Clearly there are some outliers. Let's remove those less than 10 or more than 90.
+
+```{r}
+# 84 SUSPECT'S AGE
+dat$age[ dat$age < 10 | dat$age > 90 ] <- NA
+summary(dat$age)
+# 85 SUSPECT'S HEIGHT (FEET)
+dat$ht_feet <- NULL
+
+# 86 SUSPECT'S HEIGHT (INCHES)
+dat$ht_inch <- NULL
+
+# 87 SUSPECT'S WEIGHT
+dat$weight <- NULL
+
+# 88 SUSPECT'S HAIRCOLOR
+dat$haircolr <- as.factor(dat$haircolr)
+
+# 89 SUSPECT'S EYE COLOR
+dat$eyecolor <- as.factor(dat$eyecolor)
+
+# 90 SUSPECT'S BUILD
+dat$build <- as.factor(dat$build)
+
+# 91 SUSPECT'S OTHER FEATURES (SCARS, TATOOS ETC.)
+dat$othfeatr <- NULL
+
+# 92 LOCATION OF STOP ADDRESS TYPE
+# 93 LOCATION OF STOP RESIDENT CODE
+# 94 LOCATION OF STOP PREMISE TYPE
+# 95 LOCATION OF STOP PREMISE NAME
+# 96 LOCATION OF STOP ADDRESS NUMBER
+# 97 LOCATION OF STOP STREET NAME
+# 98 LOCATION OF STOP INTERSECTION
+# 99 LOCATION OF STOP CROSS STREET
+# 100 LOCATION OF STOP APT NUMBER
+# 102 LOCATION OF STOP STATE
+# 103 LOCATION OF STOP ZIP CODE
+# 104 LOCATION OF STOP ADDRESS PRECINCT
+# 105 LOCATION OF STOP SECTOR
+# 106 LOCATION OF STOP BEAT
+# 107 LOCATION OF STOP POST
+binary <- strsplit("addrtyp rescode premtype premname addrnum stname stinter crossst aptnum state zip addrpct sector beat post",   " ")[[1]]
+for(b in binary) dat[[b]] <- NULL
+
+# 101 LOCATION OF STOP CITY
+dat$city <- as.factor(dat$city)
+
+# 108 LOCATION OF STOP X COORD
+dat$xcoord <- as.integer(dat$xcoord)
+
+# 109 LOCATION OF STOP Y COORD
+dat$ycoord <- as.integer(dat$ycoord)
+
+# 110 DETAILS TYPES CODE
+dat$dettypCM <- NULL
+
+# 111 lineCM
+dat$lineCM <- NULL
+
+# 112 CRIME CODE DESCRIPTION
+dat$detailCM <- as.factor(dat$detailCM)
+```
+
+After data cleansing, check the dimensions of new dataset.
+```{r}
+dim(dat)
+```
+
+Let's revisit the dataset.
+```{r}
+head(dat)
+```
+
+Now we save the cleansed dataset for future analysis.
+```{r}
+save(dat, file="SQF_clean.rda")
+```
